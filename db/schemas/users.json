@@ -1,0 +1,62 @@
+{
+  "table_name": "users",
+  "description": "User management table for storing user profiles and authentication data",
+  "columns": {
+    "id": {
+      "type": "INTEGER",
+      "constraints": ["PRIMARY KEY", "AUTO_INCREMENT"],
+      "description": "Unique identifier for the user"
+    },
+    "name": {
+      "type": "VARCHAR(100)",
+      "constraints": ["NOT NULL"],
+      "description": "User's display name"
+    },
+    "email": {
+      "type": "VARCHAR(255)",
+      "constraints": ["UNIQUE", "NOT NULL"],
+      "description": "User's email address (unique)"
+    },
+    "bio": {
+      "type": "TEXT",
+      "constraints": ["NULL"],
+      "description": "User's biographical information"
+    },
+    "hashed_password": {
+      "type": "VARCHAR(255)",
+      "constraints": ["NOT NULL"],
+      "description": "Bcrypt hashed password"
+    },
+    "created_at": {
+      "type": "TIMESTAMP",
+      "constraints": ["DEFAULT CURRENT_TIMESTAMP"],
+      "description": "Timestamp when user was created"
+    },
+    "updated_at": {
+      "type": "TIMESTAMP",
+      "constraints": ["DEFAULT CURRENT_TIMESTAMP", "ON UPDATE CURRENT_TIMESTAMP"],
+      "description": "Timestamp when user was last updated"
+    }
+  },
+  "indexes": [
+    {
+      "name": "idx_users_email",
+      "columns": ["email"],
+      "type": "UNIQUE"
+    },
+    {
+      "name": "idx_users_created_at",
+      "columns": ["created_at"],
+      "type": "INDEX"
+    }
+  ],
+  "relationships": {
+    "one_to_many": [
+      {
+        "target_table": "photos",
+        "foreign_key": "user_id",
+        "description": "User can have multiple photos"
+      }
+    ]
+  }
+}

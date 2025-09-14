@@ -1,0 +1,92 @@
+{
+  "table_name": "photos",
+  "description": "Photo management table for storing photo metadata and file information",
+  "columns": {
+    "id": {
+      "type": "INTEGER",
+      "constraints": ["PRIMARY KEY", "AUTO_INCREMENT"],
+      "description": "Unique identifier for the photo"
+    },
+    "title": {
+      "type": "VARCHAR(255)",
+      "constraints": ["NULL"],
+      "description": "Photo title/name"
+    },
+    "description": {
+      "type": "TEXT",
+      "constraints": ["NULL"],
+      "description": "Photo description"
+    },
+    "filename": {
+      "type": "VARCHAR(255)",
+      "constraints": ["NOT NULL"],
+      "description": "Original filename of the uploaded photo"
+    },
+    "file_path": {
+      "type": "VARCHAR(500)",
+      "constraints": ["NOT NULL"],
+      "description": "Path to the stored photo file"
+    },
+    "file_size": {
+      "type": "INTEGER",
+      "constraints": ["NULL"],
+      "description": "File size in bytes"
+    },
+    "mime_type": {
+      "type": "VARCHAR(100)",
+      "constraints": ["NULL"],
+      "description": "MIME type of the photo file"
+    },
+    "width": {
+      "type": "INTEGER",
+      "constraints": ["NULL"],
+      "description": "Photo width in pixels"
+    },
+    "height": {
+      "type": "INTEGER",
+      "constraints": ["NULL"],
+      "description": "Photo height in pixels"
+    },
+    "user_id": {
+      "type": "INTEGER",
+      "constraints": ["NULL", "REFERENCES users(id) ON DELETE SET NULL"],
+      "description": "ID of the user who uploaded the photo"
+    },
+    "created_at": {
+      "type": "TIMESTAMP",
+      "constraints": ["DEFAULT CURRENT_TIMESTAMP"],
+      "description": "Timestamp when photo was uploaded"
+    },
+    "updated_at": {
+      "type": "TIMESTAMP",
+      "constraints": ["DEFAULT CURRENT_TIMESTAMP", "ON UPDATE CURRENT_TIMESTAMP"],
+      "description": "Timestamp when photo metadata was last updated"
+    }
+  },
+  "indexes": [
+    {
+      "name": "idx_photos_user_id",
+      "columns": ["user_id"],
+      "type": "INDEX"
+    },
+    {
+      "name": "idx_photos_created_at",
+      "columns": ["created_at"],
+      "type": "INDEX"
+    },
+    {
+      "name": "idx_photos_filename",
+      "columns": ["filename"],
+      "type": "INDEX"
+    }
+  ],
+  "relationships": {
+    "many_to_one": [
+      {
+        "target_table": "users",
+        "foreign_key": "user_id",
+        "description": "Photo belongs to a user"
+      }
+    ]
+  }
+}
