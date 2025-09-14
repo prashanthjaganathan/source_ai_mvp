@@ -128,3 +128,9 @@ Thumbs.db
 *.zip
 *.tar.gz
 *.rar
+
+# Custom files and folders
+.cursor/
+*.db 
+*.sqlite
+*.sqlite3

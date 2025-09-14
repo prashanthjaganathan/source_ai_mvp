@@ -1,3 +1,4 @@
+# /backend/services/users/app/main.py
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -5,8 +6,7 @@ import uvicorn
 import os
 
 from .api.endpoints import user_routes
-from .crud.user_crud import get_db
-from ..config.database import engine, Base
+from .config.database import get_db, engine, Base  # Fixed import
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -23,7 +23,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8000"],
+    allow_origins=["http://localhost:3000", "http://localhost:8000", "http://localhost:8003"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

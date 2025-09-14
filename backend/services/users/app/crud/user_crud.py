@@ -1,11 +1,12 @@
+# /backend/services/users/app/crud/user_crud.py
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, desc
 from passlib.context import CryptContext
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ..models.user import User as UserModel
-from ..api.schemas.user import UserCreate, UserUpdate
+from ..api.schemas.user import UserCreate, UserUpdate, UserSettingsUpdate
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -31,13 +32,26 @@ def get_users(db: Session, skip: int = 0, limit: int = 100) -> List[UserModel]:
     return db.query(UserModel).offset(skip).limit(limit).all()
 
 def create_user(db: Session, user: UserCreate) -> UserModel:
-    """Create a new user"""
+    """Create a new user with default settings"""
     hashed_password = get_password_hash(user.password)
     db_user = UserModel(
         name=user.name,
         email=user.email,
         bio=user.bio,
+        age=user.age,
+        gender=user.gender,
         hashed_password=hashed_password,
+        # Default capture settings
+        capture_frequency_hours=1,
+        notifications_enabled=True,
+        silent_mode_enabled=False,
+        max_daily_captures=10,
+        # Default stats
+        total_earnings=0.0,
+        total_photos_captured=0,
+        streak_days=0,
+        is_active=True,
+        is_verified=False,
         created_at=datetime.utcnow()
     )
     db.add(db_user)
@@ -54,6 +68,36 @@ def update_user(db: Session, user_id: int, user_update: UserUpdate) -> Optional[
     update_data = user_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_user, field, value)
+    
+    db_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+def update_user_settings(db: Session, user_id: int, settings_update: UserSettingsUpdate) -> Optional[UserModel]:
+    """Update user capture settings"""
+    db_user = get_user(db, user_id)
+    if not db_user:
+        return None
+    
+    update_data = settings_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_user, field, value)
+    
+    db_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+def update_user_stats(db: Session, user_id: int, **stats) -> Optional[UserModel]:
+    """Update user statistics"""
+    db_user = get_user(db, user_id)
+    if not db_user:
+        return None
+    
+    for field, value in stats.items():
+        if hasattr(db_user, field):
+            setattr(db_user, field, value)
     
     db_user.updated_at = datetime.utcnow()
     db.commit()
@@ -77,8 +121,48 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[UserMo
         return None
     if not verify_password(password, user.hashed_password):
         return None
+    
+    # Update last login
+    user.last_login = datetime.utcnow()
+    db.commit()
+    
     return user
+
+def get_user_stats(db: Session, user_id: int) -> Optional[dict]:
+    """Get user statistics"""
+    db_user = get_user(db, user_id)
+    if not db_user:
+        return None
+    
+    # Calculate average daily captures
+    if db_user.created_at:
+        days_since_creation = (datetime.utcnow() - db_user.created_at).days
+        average_daily_captures = db_user.total_photos_captured / max(days_since_creation, 1)
+    else:
+        average_daily_captures = 0.0
+    
+    # Calculate rank (based on total earnings)
+    rank = db.query(UserModel).filter(
+        UserModel.total_earnings > db_user.total_earnings
+    ).count() + 1
+    
+    return {
+        "total_earnings": db_user.total_earnings,
+        "total_photos_captured": db_user.total_photos_captured,
+        "streak_days": db_user.streak_days,
+        "average_daily_captures": round(average_daily_captures, 2),
+        "last_capture_date": db_user.last_capture_date,
+        "rank": rank
+    }
+
+def get_leaderboard(db: Session, limit: int = 10) -> List[UserModel]:
+    """Get leaderboard by total earnings"""
+    return db.query(UserModel).order_by(desc(UserModel.total_earnings)).limit(limit).all()
 
 def count_users(db: Session) -> int:
     """Count total number of users"""
     return db.query(UserModel).count()
+
+def get_active_users(db: Session) -> int:
+    """Count active users"""
+    return db.query(UserModel).filter(UserModel.is_active == True).count()

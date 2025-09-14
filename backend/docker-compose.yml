@@ -63,6 +63,26 @@ services:
       - source_ai_network
     restart: unless-stopped
 
+    # Scheduler Service
+  scheduler_service:
+    build:
+      context: ./services/scheduler
+      dockerfile: Dockerfile
+    container_name: source_ai_scheduler_service
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql://user:password@postgres:5432/source_ai_mvp
+      - ENVIRONMENT=development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./services/scheduler:/app
+    networks:
+      - source_ai_network
+    restart: unless-stopped
+
   # Redis (for caching and sessions - optional)
   redis:
     image: redis:7-alpine

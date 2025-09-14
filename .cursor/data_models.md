@@ -74,7 +74,7 @@ class DataQueryResponse(BaseModel):
 Database Models (NoSQL - Firestore/MongoDB)
 
 The data models for the database reflect the Pydantic models but are structured for optimal storage and query performance.
-
+```
 Users Collection: users/{user_id}
 
 _id: (or user_id) string, primary key.
@@ -110,31 +110,33 @@ timestamp: timestamp.
 is_valid: boolean.
 
 monetary_value: float.
+```
 
 Frontend Models
 
 Frontend data models are conceptual, representing the structure of data retrieved from the backend to be displayed in the UI. They will be similar to the Pydantic User and Photo models but might be simplified to include only the fields needed for the user interface.
 
 User Object: Used to display the user's profile and settings.
+```
+    userId
 
-userId
+    name
 
-name
+    age
 
-age
+    profilePictureUrl
 
-profilePictureUrl
+    totalEarnings
 
-totalEarnings
+    collectionEnabled
 
-collectionEnabled
+    collectionFrequency
 
-collectionFrequency
+    Earnings Object: A simplified view of earnings data.
 
-Earnings Object: A simplified view of earnings data.
+    amount
 
-amount
+    isRedeemable
 
-isRedeemable
-
-lastUpdate
+    lastUpdate
+```
