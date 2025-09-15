@@ -1,11 +1,18 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 class PhotoBase(BaseModel):
     """Base photo schema"""
     title: Optional[str] = None
     description: Optional[str] = None
+    filename: str
+    original_key: str
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
     user_id: Optional[int] = None
 
 class PhotoCreate(PhotoBase):
@@ -20,12 +27,7 @@ class PhotoUpdate(BaseModel):
 class Photo(PhotoBase):
     """Schema for photo response"""
     id: int
-    filename: str
-    file_path: str
-    file_size: Optional[int] = None
-    mime_type: Optional[str] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
+    uid: UUID
     created_at: datetime
     updated_at: Optional[datetime] = None
     
@@ -35,9 +37,11 @@ class Photo(PhotoBase):
 class PhotoResponse(BaseModel):
     """Schema for photo response with URL"""
     id: int
+    uid: UUID
     title: Optional[str] = None
     description: Optional[str] = None
     filename: str
+    original_key: str
     url: str
     file_size: Optional[int] = None
     mime_type: Optional[str] = None
@@ -46,6 +50,9 @@ class PhotoResponse(BaseModel):
     user_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
 
 class PhotoListResponse(BaseModel):
     """Schema for paginated photo list response"""

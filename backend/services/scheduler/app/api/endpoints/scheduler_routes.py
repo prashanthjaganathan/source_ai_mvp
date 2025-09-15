@@ -29,10 +29,10 @@ async def create_user_schedule(
         db_schedule = Schedule(
             user_id=schedule_data.user_id,
             frequency_hours=schedule_data.frequency_hours,
+            next_capture_at=datetime.utcnow() + timedelta(hours=schedule_data.frequency_hours),
             notifications_enabled=schedule_data.notifications_enabled,
             silent_mode_enabled=schedule_data.silent_mode_enabled,
-            is_active=True,
-            created_at=datetime.utcnow()
+            is_active=True
         )
         
         db.add(db_schedule)
@@ -43,13 +43,15 @@ async def create_user_schedule(
             id=db_schedule.id,
             user_id=db_schedule.user_id,
             frequency_hours=db_schedule.frequency_hours,
+            next_capture_at=db_schedule.next_capture_at,
+            last_triggered_at=db_schedule.last_triggered_at,
+            is_active=db_schedule.is_active,
+            paused_at=db_schedule.paused_at,
             notifications_enabled=db_schedule.notifications_enabled,
             silent_mode_enabled=db_schedule.silent_mode_enabled,
-            is_active=db_schedule.is_active,
+            trigger_count=db_schedule.trigger_count,
             created_at=db_schedule.created_at,
-            updated_at=db_schedule.updated_at,
-            last_triggered_at=db_schedule.last_triggered_at,
-            trigger_count=db_schedule.trigger_count
+            updated_at=db_schedule.updated_at
         )
         
     except Exception as e:
@@ -80,13 +82,15 @@ async def get_user_schedules(
                 id=schedule.id,
                 user_id=schedule.user_id,
                 frequency_hours=schedule.frequency_hours,
+                next_capture_at=schedule.next_capture_at,
+                last_triggered_at=schedule.last_triggered_at,
+                is_active=schedule.is_active,
+                paused_at=schedule.paused_at,
                 notifications_enabled=schedule.notifications_enabled,
                 silent_mode_enabled=schedule.silent_mode_enabled,
-                is_active=schedule.is_active,
+                trigger_count=schedule.trigger_count,
                 created_at=schedule.created_at,
-                updated_at=schedule.updated_at,
-                last_triggered_at=schedule.last_triggered_at,
-                trigger_count=schedule.trigger_count
+                updated_at=schedule.updated_at
             )
             for schedule in schedules
         ]

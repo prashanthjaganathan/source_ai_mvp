@@ -25,6 +25,9 @@ class ScheduleResponse(BaseModel):
     last_triggered_at: Optional[datetime] = None
     is_active: bool
     paused_at: Optional[datetime] = None
+    notifications_enabled: bool
+    silent_mode_enabled: bool
+    trigger_count: int
     created_at: datetime
     updated_at: Optional[datetime] = None
     

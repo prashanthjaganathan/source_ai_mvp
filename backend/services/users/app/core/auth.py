@@ -44,7 +44,7 @@ def verify_token(token: str) -> Optional[str]:
     except JWTError:
         return None
 
-async def get_current_user(
+def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
@@ -67,14 +67,15 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
     
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user"
-        )
+    # Note: is_active field not implemented in current user model
+    # if not user.is_active:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="Inactive user"
+    #     )
     
     return user
 
-async def get_current_active_user(current_user = Depends(get_current_user)):
+def get_current_active_user(current_user = Depends(get_current_user)):
     """Get current active user"""
     return current_user

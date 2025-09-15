@@ -6,8 +6,7 @@ import uvicorn
 import os
 
 from .api.endpoints import photo_routes
-from .crud.photo_crud import get_db
-from ..config.database import engine, Base
+from .config.database import engine, Base, get_db
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -31,7 +30,9 @@ app.add_middleware(
 )
 
 # Mount static files for serving uploaded images
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 # Include routers
 app.include_router(

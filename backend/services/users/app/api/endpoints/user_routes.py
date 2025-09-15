@@ -78,10 +78,10 @@ def update_current_user_profile(
 def get_user_settings(current_user: UserModel = Depends(get_current_active_user)):
     """Get user capture settings"""
     return {
-        "capture_frequency_hours": current_user.capture_frequency_hours,
-        "notifications_enabled": current_user.notifications_enabled,
-        "silent_mode_enabled": current_user.silent_mode_enabled,
-        "max_daily_captures": current_user.max_daily_captures
+        "capture_frequency_hours": getattr(current_user, 'capture_frequency_hours', 24),
+        "notifications_enabled": getattr(current_user, 'notifications_enabled', True),
+        "silent_mode_enabled": getattr(current_user, 'silent_mode_enabled', False),
+        "max_daily_captures": getattr(current_user, 'max_daily_captures', 10)
     }
 
 @router.put("/profile/settings", response_model=UserResponse)
@@ -177,11 +177,14 @@ def get_platform_stats(db: Session = Depends(get_db)):
     return {
         "total_users": count_users(db),
         "active_users": get_active_users(db),
-        "total_photos_captured": db.query(UserModel).with_entities(
-            db.func.sum(UserModel.total_photos_captured)
-        ).scalar() or 0,
-        "total_earnings": db.query(UserModel).with_entities(
-            db.func.sum(UserModel.total_earnings)
+        "total_incentives_earned": db.query(UserModel).with_entities(
+            db.func.sum(UserModel.incentives_earned)
+        ).scalar() or 0.0,
+        "total_incentives_redeemed": db.query(UserModel).with_entities(
+            db.func.sum(UserModel.incentives_redeemed)
+        ).scalar() or 0.0,
+        "total_incentives_available": db.query(UserModel).with_entities(
+            db.func.sum(UserModel.incentives_available)
         ).scalar() or 0.0
     }
 

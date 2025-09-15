@@ -1,11 +1,16 @@
 {
   "table_name": "photos",
-  "description": "Photo management table for storing photo metadata and file information",
+  "description": "Photo management table for storing photo metadata and file information. All photo objects are stored in S3 with bucket versioning enabled and default encryption via SSE‑KMS (with S3 Bucket Keys).",
   "columns": {
     "id": {
       "type": "INTEGER",
       "constraints": ["PRIMARY KEY", "AUTO_INCREMENT"],
       "description": "Unique identifier for the photo"
+    },
+    "uid": {
+      "type": "UUID",
+      "constraints": ["NOT NULL", "DEFAULT uuid_generate_v4()"],
+      "description": "Stable external UUID for public references"
     },
     "title": {
       "type": "VARCHAR(255)",
@@ -22,30 +27,70 @@
       "constraints": ["NOT NULL"],
       "description": "Original filename of the uploaded photo"
     },
-    "file_path": {
+    "original_key": {
       "type": "VARCHAR(500)",
       "constraints": ["NOT NULL"],
-      "description": "Path to the stored photo file"
+      "description": "S3 key to the original uploaded object"
+    },
+    "normalized_key": {
+      "type": "TEXT",
+      "constraints": ["NULL"],
+      "description": "S3 key to the normalized AVIF derivative"
+    },
+    "version_id": {
+      "type": "VARCHAR(200)",
+      "constraints": ["NULL"],
+      "description": "S3 object version ID for the stored file (pairs with original_key)"
     },
     "file_size": {
       "type": "INTEGER",
       "constraints": ["NULL"],
-      "description": "File size in bytes"
+      "description": "File size in bytes (original)"
     },
     "mime_type": {
       "type": "VARCHAR(100)",
       "constraints": ["NULL"],
-      "description": "MIME type of the photo file"
+      "description": "MIME type of the original file"
     },
     "width": {
       "type": "INTEGER",
       "constraints": ["NULL"],
-      "description": "Photo width in pixels"
+      "description": "Photo width in pixels (original)"
     },
     "height": {
       "type": "INTEGER",
       "constraints": ["NULL"],
-      "description": "Photo height in pixels"
+      "description": "Photo height in pixels (original)"
+    },
+    "captured_at": {
+      "type": "TIMESTAMP",
+      "constraints": ["NULL"],
+      "description": "The time the photo was taken (from EXIF or client-provided)"
+    },
+    "sha256": {
+      "type": "BYTEA",
+      "constraints": ["NULL"],
+      "description": "SHA-256 hash of the original bytes for deduplication/integrity"
+    },
+    "face_valid": {
+      "type": "BOOLEAN",
+      "constraints": ["DEFAULT FALSE"],
+      "description": "Whether a valid face was detected in the image"
+    },
+    "face_match": {
+      "type": "BOOLEAN",
+      "constraints": ["NULL"],
+      "description": "Whether the face matches the registered user (optional)"
+    },
+    "consent_version": {
+      "type": "TEXT",
+      "constraints": ["NULL"],
+      "description": "Consent version in effect at capture time"
+    },
+    "monetizable": {
+      "type": "BOOLEAN",
+      "constraints": ["DEFAULT FALSE"],
+      "description": "Derived flag: valid face and consent allow earnings"
     },
     "user_id": {
       "type": "INTEGER",
@@ -77,6 +122,16 @@
     {
       "name": "idx_photos_filename",
       "columns": ["filename"],
+      "type": "INDEX"
+    },
+    {
+      "name": "idx_photos_originalkey_version",
+      "columns": ["original_key", "version_id"],
+      "type": "INDEX"
+    },
+    {
+      "name": "idx_photos_user_created",
+      "columns": ["user_id", "created_at"],
       "type": "INDEX"
     }
   ],

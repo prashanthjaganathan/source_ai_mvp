@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..config.database import SessionLocal
 from ..models.capture_session import CaptureSession
 from .mac_camera_capture import MacCameraCapture
+from .s3_service import S3Service
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +23,10 @@ class PhotoCaptureService:
     
     def __init__(self):
         self.http_client = httpx.AsyncClient(timeout=30.0)
-        self.capture_dir = "captured_photos"
+        self.capture_dir = "captured_photos"  # Keep for fallback
         self.camera_capture = MacCameraCapture()
+        self.s3_service = S3Service()
+        self.use_s3 = os.getenv("USE_S3_STORAGE", "true").lower() == "true"
         self.setup_capture_directory()
         
     def setup_capture_directory(self):
@@ -34,7 +37,12 @@ class PhotoCaptureService:
     async def initialize(self):
         """Initialize photo capture service"""
         logger.info("Initializing Photo Capture Service with Real Mac Camera...")
-        logger.info(f"Photos will be stored in: {os.path.abspath(self.capture_dir)}")
+        
+        if self.use_s3:
+            logger.info("📦 Using S3 storage for photos")
+            await self.s3_service.initialize()
+        else:
+            logger.info(f"📁 Using local storage: {os.path.abspath(self.capture_dir)}")
         
         # Check camera availability
         camera_available = await self.camera_capture.check_camera_availability()
@@ -57,39 +65,85 @@ class PhotoCaptureService:
         try:
             logger.info(f"Capturing REAL photo for user {user_id} (session: {capture_session_id})")
             
-            # Generate file path
+            # Generate filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{timestamp}_session_{capture_session_id}.jpg"
-            user_dir = os.path.join(self.capture_dir, user_id)
-            os.makedirs(user_dir, exist_ok=True)
-            photo_path = os.path.join(user_dir, filename)
             
             # Try to capture with real camera first
-            camera_success, camera_error = await self.camera_capture.capture_photo(photo_path)
-            
-            if not camera_success:
-                logger.warning(f"Camera capture failed: {camera_error}")
-                logger.info("Falling back to generated photo...")
+            if self.use_s3:
+                # For S3, capture to temporary file first
+                temp_path = f"/tmp/{filename}"
+                camera_success, camera_error = await self.camera_capture.capture_photo(temp_path)
                 
-                # Fallback: create a photo with camera error info
-                photo_data, photo_info = await self.create_fallback_photo(user_id, capture_session_id, camera_error)
+                if camera_success:
+                    # Read photo data and upload to S3
+                    with open(temp_path, 'rb') as f:
+                        photo_data = f.read()
+                    
+                    # Upload to S3
+                    upload_result = await self.s3_service.upload_photo(
+                        photo_data, user_id, capture_session_id, filename
+                    )
+                    
+                    if upload_result["success"]:
+                        photo_info = {
+                            "s3_key": upload_result["s3_key"],
+                            "photo_url": upload_result["photo_url"],
+                            "size_bytes": upload_result["size_bytes"],
+                            "filename": filename,
+                            "storage_type": "s3",
+                            "bucket": upload_result["bucket"]
+                        }
+                        logger.info(f"✅ Photo uploaded to S3: {upload_result['photo_url']}")
+                    else:
+                        logger.error(f"S3 upload failed: {upload_result['error']}")
+                        # Fallback to local storage
+                        photo_info = await self._fallback_to_local_storage(user_id, capture_session_id, filename, temp_path)
+                else:
+                    logger.warning(f"Camera capture failed: {camera_error}")
+                    # Create fallback photo and upload to S3
+                    photo_data, fallback_info = await self.create_fallback_photo(user_id, capture_session_id, camera_error)
+                    upload_result = await self.s3_service.upload_photo(photo_data, user_id, capture_session_id, filename)
+                    
+                    if upload_result["success"]:
+                        photo_info = {
+                            "s3_key": upload_result["s3_key"],
+                            "photo_url": upload_result["photo_url"],
+                            "size_bytes": upload_result["size_bytes"],
+                            "filename": filename,
+                            "storage_type": "s3_fallback",
+                            "bucket": upload_result["bucket"],
+                            "fallback": True
+                        }
+                    else:
+                        photo_info = fallback_info
                 
-                with open(photo_path, 'wb') as f:
-                    f.write(photo_data)
-                
-                logger.info(f"Fallback photo saved: {photo_path}")
+                # Clean up temp file
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
             else:
-                logger.info(f"✅ Real camera photo captured: {photo_path}")
-            
-            # Get photo information
-            photo_info = await self.get_photo_info(photo_path)
+                # Local storage fallback
+                user_dir = os.path.join(self.capture_dir, user_id)
+                os.makedirs(user_dir, exist_ok=True)
+                photo_path = os.path.join(user_dir, filename)
+                
+                camera_success, camera_error = await self.camera_capture.capture_photo(photo_path)
+                
+                if not camera_success:
+                    logger.warning(f"Camera capture failed: {camera_error}")
+                    photo_data, photo_info = await self.create_fallback_photo(user_id, capture_session_id, camera_error)
+                    with open(photo_path, 'wb') as f:
+                        f.write(photo_data)
+                else:
+                    logger.info(f"✅ Real camera photo captured: {photo_path}")
+                
+                photo_info = await self.get_photo_info(photo_path)
             
             # Update capture session
             await self.update_capture_session_status(
                 capture_session_id, "captured", {
-                    "photo_path": photo_path,
-                    "trigger_type": trigger_type,
                     "photo_info": photo_info,
+                    "trigger_type": trigger_type,
                     "camera_captured": camera_success,
                     "camera_error": camera_error if not camera_success else None
                 }
@@ -97,7 +151,7 @@ class PhotoCaptureService:
             
             # Process the photo
             result = await self.process_captured_photo(
-                user_id, capture_session_id, photo_path, photo_info
+                user_id, capture_session_id, photo_info
             )
             
             result["camera_captured"] = camera_success
@@ -112,6 +166,27 @@ class PhotoCaptureService:
                 capture_session_id, "failed", {"error": str(e)}
             )
             return {"success": False, "error": str(e)}
+    
+    async def _fallback_to_local_storage(self, user_id: str, capture_session_id: str, filename: str, temp_path: str) -> Dict[str, Any]:
+        """Fallback to local storage when S3 fails"""
+        try:
+            user_dir = os.path.join(self.capture_dir, user_id)
+            os.makedirs(user_dir, exist_ok=True)
+            photo_path = os.path.join(user_dir, filename)
+            
+            # Move temp file to local storage
+            import shutil
+            shutil.move(temp_path, photo_path)
+            
+            return await self.get_photo_info(photo_path)
+        except Exception as e:
+            logger.error(f"Error in local storage fallback: {e}")
+            return {
+                "filename": filename,
+                "size_bytes": 0,
+                "storage_type": "local_fallback",
+                "error": str(e)
+            }
     
     async def create_fallback_photo(self, user_id: str, capture_session_id: str, camera_error: str) -> Tuple[bytes, Dict[str, Any]]:
         """Create a fallback photo when camera capture fails"""
@@ -196,7 +271,6 @@ class PhotoCaptureService:
         self, 
         user_id: str, 
         capture_session_id: str,
-        photo_path: str,
         photo_info: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Process the captured photo"""
@@ -204,13 +278,16 @@ class PhotoCaptureService:
             logger.info(f"Processing captured photo for user {user_id}")
             
             # Simulate photo validation
-            validation_result = await self.validate_photo(photo_path, user_id)
+            validation_result = await self.validate_photo_info(photo_info, user_id)
             
             if validation_result["valid"]:
-                # Simulate upload
-                upload_result = await self.upload_to_photos_service(
-                    user_id, capture_session_id, photo_path, photo_info
-                )
+                # Photo is already uploaded to S3, just return success
+                upload_result = {
+                    "success": True,
+                    "photo_id": photo_info.get("s3_key", f"photo_{uuid.uuid4().hex[:8]}"),
+                    "url": photo_info.get("photo_url", ""),
+                    "storage_type": photo_info.get("storage_type", "unknown")
+                }
                 
                 if upload_result.get("success"):
                     # Process earnings
@@ -268,6 +345,51 @@ class PhotoCaptureService:
         except Exception as e:
             logger.error(f"Error processing captured photo: {e}")
             return {"success": False, "error": str(e)}
+    
+    async def validate_photo_info(self, photo_info: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+        """Validate photo information"""
+        try:
+            if not photo_info:
+                return {
+                    "valid": False,
+                    "error": "No photo information provided",
+                    "validated_at": datetime.now().isoformat()
+                }
+            
+            # Check if photo has required fields
+            required_fields = ["size_bytes", "filename"]
+            for field in required_fields:
+                if field not in photo_info:
+                    return {
+                        "valid": False,
+                        "error": f"Missing required field: {field}",
+                        "validated_at": datetime.now().isoformat()
+                    }
+            
+            # Check file size
+            file_size = photo_info.get("size_bytes", 0)
+            if file_size < 1000:  # Less than 1KB
+                return {
+                    "valid": False,
+                    "error": "Photo file too small",
+                    "file_size": file_size,
+                    "validated_at": datetime.now().isoformat()
+                }
+            
+            return {
+                "valid": True,
+                "file_size": file_size,
+                "storage_type": photo_info.get("storage_type", "unknown"),
+                "validated_at": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error validating photo info: {e}")
+            return {
+                "valid": False,
+                "error": str(e),
+                "validated_at": datetime.now().isoformat()
+            }
     
     async def validate_photo(self, photo_path: str, user_id: str) -> Dict[str, Any]:
         """Validate the captured photo"""
@@ -402,38 +524,54 @@ class PhotoCaptureService:
     async def get_captured_photos(self, user_id: str = None) -> Dict[str, Any]:
         """Get information about captured photos"""
         try:
-            photos_info = []
-            
-            if user_id:
-                user_dir = os.path.join(self.capture_dir, user_id)
-                if os.path.exists(user_dir):
-                    for filename in os.listdir(user_dir):
-                        if filename.endswith('.jpg'):
-                            file_path = os.path.join(user_dir, filename)
-                            
-                            photo_info = {
-                                "filename": filename,
-                                "file_path": file_path,
-                                "absolute_path": os.path.abspath(file_path),
-                                "size_bytes": os.path.getsize(file_path),
-                                "modified": datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
-                            }
-                            
-                            photos_info.append(photo_info)
+            if self.use_s3:
+                # Get photos from S3
+                if user_id:
+                    return await self.s3_service.list_user_photos(user_id)
+                else:
+                    # For now, return empty for all users (could be extended)
+                    return {
+                        "total_photos": 0,
+                        "photos": [],
+                        "storage_type": "s3",
+                        "message": "Use specific user_id to get photos"
+                    }
             else:
-                # Get all photos from all users
-                if os.path.exists(self.capture_dir):
-                    for user_folder in os.listdir(self.capture_dir):
-                        user_path = os.path.join(self.capture_dir, user_folder)
-                        if os.path.isdir(user_path):
-                            user_photos = await self.get_captured_photos(user_folder)
-                            photos_info.extend(user_photos.get("photos", []))
-            
-            return {
-                "capture_directory": os.path.abspath(self.capture_dir),
-                "total_photos": len(photos_info),
-                "photos": photos_info
-            }
+                # Local storage fallback
+                photos_info = []
+                
+                if user_id:
+                    user_dir = os.path.join(self.capture_dir, user_id)
+                    if os.path.exists(user_dir):
+                        for filename in os.listdir(user_dir):
+                            if filename.endswith('.jpg'):
+                                file_path = os.path.join(user_dir, filename)
+                                
+                                photo_info = {
+                                    "filename": filename,
+                                    "file_path": file_path,
+                                    "absolute_path": os.path.abspath(file_path),
+                                    "size_bytes": os.path.getsize(file_path),
+                                    "modified": datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat(),
+                                    "storage_type": "local"
+                                }
+                                
+                                photos_info.append(photo_info)
+                else:
+                    # Get all photos from all users
+                    if os.path.exists(self.capture_dir):
+                        for user_folder in os.listdir(self.capture_dir):
+                            user_path = os.path.join(self.capture_dir, user_folder)
+                            if os.path.isdir(user_path):
+                                user_photos = await self.get_captured_photos(user_folder)
+                                photos_info.extend(user_photos.get("photos", []))
+                
+                return {
+                    "capture_directory": os.path.abspath(self.capture_dir),
+                    "total_photos": len(photos_info),
+                    "photos": photos_info,
+                    "storage_type": "local"
+                }
             
         except Exception as e:
             logger.error(f"Error getting captured photos: {e}")
@@ -442,4 +580,6 @@ class PhotoCaptureService:
     async def cleanup(self):
         """Cleanup photo capture service"""
         await self.http_client.aclose()
+        if self.use_s3:
+            await self.s3_service.cleanup()
         logger.info("Photo Capture Service cleanup completed")

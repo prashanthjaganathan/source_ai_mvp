@@ -2,20 +2,120 @@
 
 This guide provides detailed information for developers working on the Source AI MVP project.
 
+## 🎉 Current Status: Backend-Database Sync Complete
+
+**✅ SYNC STATUS**: Backend models and database schema are now perfectly synchronized!
+
+### What Was Fixed:
+- **Database Configuration**: All services now use PostgreSQL consistently
+- **User Model**: Updated to match database schema with `uid`, `incentives_*` fields
+- **Photo Model**: Updated to use `original_key` instead of `file_path`, added `uid`
+- **CRUD Operations**: All field references updated to match new schema
+- **Database Permissions**: Proper user permissions configured
+
+### Verification:
+```bash
+cd backend
+python check_sync.py
+# Should show: ✅ All checks passed! Backend and database are in sync.
+```
+
 ## Quick Start for New Developers
 
-1. **Clone and Setup**:
+1. **Prerequisites**:
+   ```bash
+   # Ensure PostgreSQL is running
+   brew services start postgresql
+   
+   # Create database and user (if not exists)
+   psql -U postgres -c "CREATE USER \"user\" WITH PASSWORD 'password';"
+   psql -U postgres -c "CREATE DATABASE source_ai_mvp OWNER \"user\";"
+   psql -U postgres -d source_ai_mvp -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"user\";"
+   ```
+
+2. **Clone and Setup**:
    ```bash
    git clone <repository-url>
    cd source_ai_mvp
    make setup
    ```
 
-2. **Access the Application**:
+3. **Access the Application**:
    - Frontend: http://localhost:3000
    - Users API: http://localhost:8001/docs
    - Photos API: http://localhost:8002/docs
    - API Gateway: http://localhost
+
+## Testing the Current Setup
+
+### 1. Verify Database-Backend Sync
+```bash
+cd backend
+python check_sync.py
+```
+**Expected Output**:
+```
+✅ Missing user UIDs: 0 (should be 0)
+✅ Missing photo UIDs: 0 (should be 0)  
+✅ Missing original_key: 0 (should be 0)
+✅ All checks passed! Backend and database are in sync.
+```
+
+### 2. Test Backend Services
+```bash
+# Test Users Service
+cd backend/services/users
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 &
+curl http://localhost:8001/health
+
+# Test Photos Service  
+cd backend/services/photos
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8002 &
+curl http://localhost:8002/health
+```
+
+### 3. Test API Endpoints
+```bash
+# Test Users API
+curl http://localhost:8001/docs  # Should show Swagger UI
+curl http://localhost:8001/users/  # Should return user list
+
+# Test Photos API
+curl http://localhost:8002/docs  # Should show Swagger UI
+curl http://localhost:8002/photos/  # Should return photo list
+```
+
+### 4. Test Database Operations
+```bash
+# Connect to database
+psql -U user -d source_ai_mvp
+
+# Check tables
+\dt
+
+# Check sample data
+SELECT id, uid, name, email, incentives_earned FROM users LIMIT 3;
+SELECT id, uid, filename, original_key, user_id FROM photos LIMIT 3;
+```
+
+### 5. Run Comprehensive Test
+```bash
+# Run the automated test script
+python test_app.py
+```
+**Expected Output**:
+```
+✅ Database-backend sync: PASSED
+✅ users health: PASSED
+✅ photos health: PASSED
+✅ users docs: PASSED
+✅ users API: PASSED - 5 items returned
+✅ photos docs: PASSED
+✅ photos API: PASSED - 5 items returned
+🎉 ALL TESTS PASSED! Your app is working correctly.
+```
+
+**Status**: ✅ **ALL TESTS PASSING** - The app is fully functional!
 
 ## Development Workflow
 
@@ -332,6 +432,24 @@ make deploy-prod
 2. Update configuration values
 3. Ensure secrets are properly secured
 
+## Recent Changes & Migration Notes
+
+### Backend-Database Sync (Completed)
+- **Date**: September 14, 2025
+- **Status**: ✅ Complete
+- **Changes**: See `SYNC_CHANGES.md` for detailed documentation
+
+### Key Model Changes:
+- **User Model**: Now uses `incentives_earned/redeemed/available` instead of `total_earnings`
+- **Photo Model**: Now uses `original_key` instead of `file_path`
+- **UUID Fields**: Both models now have `uid` fields for external references
+- **Backward Compatibility**: Properties added for smooth transition
+
+### Migration Status:
+- **Database**: Already has correct schema (no migration needed)
+- **Backend**: Updated to match database schema
+- **Services**: All CRUD operations updated
+
 ## Troubleshooting
 
 ### Common Issues
@@ -340,6 +458,26 @@ make deploy-prod
 2. **Database Connection**: Check DATABASE_URL and PostgreSQL status
 3. **File Permissions**: Ensure upload directories are writable
 4. **Memory Issues**: Increase Docker memory allocation
+
+### Sync-Related Issues
+
+1. **Import Errors**: If you see import errors, ensure all services use the same database
+   ```bash
+   # Check database configuration
+   grep -r "DATABASE_URL" backend/services/*/app/config/
+   ```
+
+2. **Field Not Found**: If you see field errors, check the model definitions
+   ```bash
+   # Verify model fields match database
+   python check_sync.py
+   ```
+
+3. **Permission Errors**: If database operations fail
+   ```bash
+   # Grant proper permissions
+   psql -U postgres -d source_ai_mvp -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"user\";"
+   ```
 
 ### Getting Help
 

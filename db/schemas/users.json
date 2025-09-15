@@ -7,6 +7,11 @@
       "constraints": ["PRIMARY KEY", "AUTO_INCREMENT"],
       "description": "Unique identifier for the user"
     },
+    "uid": {
+      "type": "UUID",
+      "constraints": ["NOT NULL", "DEFAULT uuid_generate_v4()"],
+      "description": "Stable external UUID for public references"
+    },
     "name": {
       "type": "VARCHAR(100)",
       "constraints": ["NOT NULL"],
@@ -17,15 +22,35 @@
       "constraints": ["UNIQUE", "NOT NULL"],
       "description": "User's email address (unique)"
     },
-    "bio": {
-      "type": "TEXT",
-      "constraints": ["NULL"],
-      "description": "User's biographical information"
-    },
     "hashed_password": {
       "type": "VARCHAR(255)",
       "constraints": ["NOT NULL"],
       "description": "Bcrypt hashed password"
+    },
+    "age": {
+      "type": "INTEGER",
+      "constraints": ["NULL"],
+      "description": "User's age"
+    },
+    "gender": {
+      "type": "VARCHAR(10)",
+      "constraints": ["NULL"],
+      "description": "User's gender"
+    },
+    "incentives_earned": {
+      "type": "FLOAT",
+      "constraints": ["NULL"],
+      "description": "User's incentives earned"
+    },
+    "incentives_redeemed": {
+      "type": "FLOAT",
+      "constraints": ["NULL"],
+      "description": "User's incentives redeemed"
+    },
+    "incentives_available": {
+      "type": "FLOAT",
+      "constraints": ["NULL"],
+      "description": "User's incentives available"
     },
     "created_at": {
       "type": "TIMESTAMP",
