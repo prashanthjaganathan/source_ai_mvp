@@ -19,7 +19,7 @@ def get_photos(db: Session, skip: int = 0, limit: int = 100, user_id: Optional[i
         query = query.filter(PhotoModel.user_id == user_id)
     return query.offset(skip).limit(limit).all()
 
-def create_photo(db: Session, photo: PhotoCreate, filename: str, file_path: str, 
+def create_photo(db: Session, photo: PhotoCreate, filename: str, original_key: str, 
                 file_size: int = None, mime_type: str = None, 
                 width: int = None, height: int = None) -> PhotoModel:
     """Create a new photo record"""
@@ -27,7 +27,7 @@ def create_photo(db: Session, photo: PhotoCreate, filename: str, file_path: str,
         title=photo.title,
         description=photo.description,
         filename=filename,
-        file_path=file_path,
+        original_key=original_key,
         file_size=file_size,
         mime_type=mime_type,
         width=width,
@@ -63,10 +63,10 @@ def delete_photo(db: Session, photo_id: int) -> bool:
     
     # Delete the file from filesystem
     try:
-        if os.path.exists(db_photo.file_path):
-            os.remove(db_photo.file_path)
+        if os.path.exists(db_photo.original_key):
+            os.remove(db_photo.original_key)
     except Exception as e:
-        print(f"Error deleting file {db_photo.file_path}: {e}")
+        print(f"Error deleting file {db_photo.original_key}: {e}")
     
     db.delete(db_photo)
     db.commit()

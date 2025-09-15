@@ -49,6 +49,8 @@ async def upload_photo(
         photo_data = PhotoCreate(
             title=title,
             description=description,
+            filename=filename,
+            original_key=file_path,
             user_id=user_id
         )
         
@@ -56,7 +58,7 @@ async def upload_photo(
             db=db,
             photo=photo_data,
             filename=filename,
-            file_path=file_path,
+            original_key=file_path,
             file_size=file_size,
             mime_type=file.content_type,
             width=width,
@@ -109,9 +111,11 @@ def read_photos(
         photo_url = generate_photo_url(photo)
         photo_response = PhotoResponse(
             id=photo.id,
+            uid=photo.uid,
             title=photo.title,
             description=photo.description,
             filename=photo.filename,
+            original_key=photo.original_key,
             url=photo_url,
             file_size=photo.file_size,
             mime_type=photo.mime_type,
@@ -144,9 +148,11 @@ def read_photo(photo_id: int, db: Session = Depends(get_db)):
     photo_url = generate_photo_url(db_photo)
     return PhotoResponse(
         id=db_photo.id,
+        uid=db_photo.uid,
         title=db_photo.title,
         description=db_photo.description,
         filename=db_photo.filename,
+        original_key=db_photo.original_key,
         url=photo_url,
         file_size=db_photo.file_size,
         mime_type=db_photo.mime_type,
@@ -174,9 +180,11 @@ def update_photo_metadata(
     photo_url = generate_photo_url(db_photo)
     return PhotoResponse(
         id=db_photo.id,
+        uid=db_photo.uid,
         title=db_photo.title,
         description=db_photo.description,
         filename=db_photo.filename,
+        original_key=db_photo.original_key,
         url=photo_url,
         file_size=db_photo.file_size,
         mime_type=db_photo.mime_type,
